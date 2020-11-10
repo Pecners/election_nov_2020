@@ -13,6 +13,13 @@ wards %>%
 
 # Data
 
+turnout_16 <- "https://data.milwaukee.gov/dataset/c48ea33c-c332-430b-8c76-7269986c21ed/resource/feffd844-d2ef-4c4d-aa03-c474c5364455/download/voterturnoutbywardnov82016.csv"
+
+t_16 <- read_csv(turnout_16) %>%
+  select(-c(4:5)) 
+
+names(t_16) <- str_replace_all(str_to_lower(names(t_16)), " ", "_")
+
 vote_counts <- read_csv("data/unofficial_vote_counts.csv") %>%
   mutate(ward = str_extract(str_trim(ward_name, side = "right"), "\\d*$"))
 
@@ -102,3 +109,25 @@ model <- lm(vote_share ~ percent_of_total, data = full %>%
 summary(model)
 
 # How did turnout relate to ward demographics?
+
+t_20 <- voter_turnout %>%
+  filter(str_detect(ward_name, "City of Milwaukee")) %>%
+  select(-c(1:2))
+
+all_turnout <- left_join(t_20, t_16 %>% modify_at("ward", as.character), by = "ward", suffix = c("_20", "_16")) %>%
+  mutate(per_16 = ballots_cast_total_16 / registered_voters_total_16,
+         per_20 = ballots_cast_total_20 / registered_voters_total_20,
+         diff_rv = registered_voters_total_20 - registered_voters_total_16,
+         diff_turnout_per = per_20 - per_16)
+
+all_turnout_sf <- left_join(wards, all_turnout, by = c("WARD" = "ward"))
+
+all_turnout_sf %>%
+  ggplot(aes(fill = ifelse(diff_rv > 0, "More", "Less"))) +
+  geom_sf(color = "white")
+
+all_turnout %>%
+  ggplot(aes(diff_rv, diff_turnout_per)) +
+  geom_point() +
+  theme_minimal()
+
